@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:async';
 
 import 'package:meta/meta.dart';
+import 'package:webcrypto/src/testing/utils/detected_runtime.dart';
+import 'package:webcrypto/src/testing/utils/ffibonacci_chunked_stream.dart';
 import 'package:webcrypto/webcrypto.dart';
-import 'detected_runtime.dart';
-import 'ffibonacci_chunked_stream.dart';
-import 'utils.dart';
-import 'lipsum.dart';
+
 import 'err_stack_stub.dart' if (dart.library.ffi) 'err_stack_ffi.dart';
+import 'lipsum.dart';
+import 'utils.dart';
 
 // Export utilities necessary for implementing a `TestRunner`.
 export 'utils.dart' show hashFromJson, curveFromJson;
@@ -72,6 +73,24 @@ class _TestCase {
   // Parameters for deriveBits (required, if there is a derivedBits)
   final Map<String, dynamic>? deriveParams;
 
+  // Exception handling parameters
+  final Type? generateKeyException;
+  final String? generateKeyExceptionMessage;
+  final Type? importKeyException;
+  final String? importKeyExceptionMessage;
+  final Type? signException;
+  final String? signExceptionMessage;
+  final Type? verifyException;
+  final String? verifyExceptionMessage;
+  final Type? encryptException;
+  final String? encryptExceptionMessage;
+  final Type? decryptException;
+  final String? decryptExceptionMessage;
+  final Type? deriveException;
+  final String? deriveExceptionMessage;
+  final Type? exportKeyException;
+  final String? exportKeyExceptionMessage;
+
   _TestCase(
     this.name, {
     this.generateKeyParams,
@@ -90,6 +109,22 @@ class _TestCase {
     this.signVerifyParams,
     this.encryptDecryptParams,
     this.deriveParams,
+    this.generateKeyException,
+    this.generateKeyExceptionMessage,
+    this.importKeyException,
+    this.importKeyExceptionMessage,
+    this.signException,
+    this.signExceptionMessage,
+    this.verifyException,
+    this.verifyExceptionMessage,
+    this.encryptException,
+    this.encryptExceptionMessage,
+    this.decryptException,
+    this.decryptExceptionMessage,
+    this.deriveException,
+    this.deriveExceptionMessage,
+    this.exportKeyException,
+    this.exportKeyExceptionMessage,
   });
 
   factory _TestCase.fromJson(Map json) {
@@ -114,6 +149,23 @@ class _TestCase {
       encryptDecryptParams:
           _optionalStringMapDecode(json['encryptDecryptParams']),
       deriveParams: _optionalStringMapDecode(json['deriveParams']),
+      generateKeyException: json['generateKeyException'] as Type?,
+      generateKeyExceptionMessage:
+          json['generateKeyExceptionMessage'] as String?,
+      importKeyException: json['importKeyException'] as Type?,
+      importKeyExceptionMessage: json['importKeyExceptionMessage'] as String?,
+      signException: json['signException'] as Type?,
+      signExceptionMessage: json['signExceptionMessage'] as String?,
+      verifyException: json['verifyException'] as Type?,
+      verifyExceptionMessage: json['verifyExceptionMessage'] as String?,
+      encryptException: json['encryptException'] as Type?,
+      encryptExceptionMessage: json['encryptExceptionMessage'] as String?,
+      decryptException: json['decryptException'] as Type?,
+      decryptExceptionMessage: json['decryptExceptionMessage'] as String?,
+      deriveException: json['deriveException'] as Type?,
+      deriveExceptionMessage: json['deriveExceptionMessage'] as String?,
+      exportKeyException: json['exportKeyException'] as Type?,
+      exportKeyExceptionMessage: json['exportKeyExceptionMessage'] as String?,
     );
   }
 
@@ -136,6 +188,22 @@ class _TestCase {
       'signVerifyParams': signVerifyParams,
       'encryptDecryptParams': encryptDecryptParams,
       'deriveParams': deriveParams,
+      'generateKeyException': generateKeyException,
+      'generateKeyExceptionMessage': generateKeyExceptionMessage,
+      'importKeyException': importKeyException,
+      'importKeyExceptionMessage': importKeyExceptionMessage,
+      'signException': signException,
+      'signExceptionMessage': signExceptionMessage,
+      'verifyException': verifyException,
+      'verifyExceptionMessage': verifyExceptionMessage,
+      'encryptException': encryptException,
+      'encryptExceptionMessage': encryptExceptionMessage,
+      'decryptException': decryptException,
+      'decryptExceptionMessage': decryptExceptionMessage,
+      'deriveException': deriveException,
+      'deriveExceptionMessage': deriveExceptionMessage,
+      'exportKeyException': exportKeyException,
+      'exportKeyExceptionMessage': exportKeyExceptionMessage,
     }..removeWhere((_, v) => v == null);
   }
 }
@@ -221,6 +289,35 @@ class _KeyPair<S, T> implements KeyPair<S, T> {
   final T publicKey;
 
   _KeyPair({required this.privateKey, required this.publicKey});
+}
+
+Future<T?> _handleException<T>(
+  FutureOr<T> Function() operation,
+  Type? expectedExceptionType,
+  String? expectedExceptionMessage,
+) async {
+  try {
+    final result = await operation();
+
+    if (expectedExceptionType != null) {
+      check(false, 'expected exception but none was thrown');
+
+      return null;
+    }
+
+    return result;
+  } catch (e) {
+    if (expectedExceptionType != null) {
+      check(
+          e.runtimeType == expectedExceptionType, 'unexpected exception type');
+      if (expectedExceptionMessage != null) {
+        check(e.toString().contains(expectedExceptionMessage),
+            'unexpected exception message');
+      }
+      return null;
+    }
+    rethrow;
+  }
 }
 
 @sealed
@@ -740,32 +837,71 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (c.generateKeyParams != null) {
     test('generateKeyPair()', () async {
-      final pair = await r._generateKeyPair(c.generateKeyParams!);
+      final pair = await _handleException(
+        () => r._generateKeyPair(c.generateKeyParams!),
+        c.generateKeyException,
+        c.generateKeyExceptionMessage,
+      );
+
+      if (pair == null) {
+        return; // Exception was expected and handled
+      }
+
       check(pair.privateKey != null);
       check(pair.publicKey != null);
       publicKey = pair.publicKey;
       privateKey = pair.privateKey;
     });
+
+    if (c.generateKeyException != null) {
+      return;
+    }
   } else {
     test('import key-pair', () async {
       // Get a privateKey
       if (c.privateRawKeyData != null) {
-        privateKey = await r._importPrivateRawKey!(
-          c.privateRawKeyData!,
-          c.importKeyParams!,
+        privateKey = await _handleException(
+          () => r._importPrivateRawKey!(
+            c.privateRawKeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+
+        if (c.importKeyException != null && privateKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(privateKey != null);
       } else if (c.privatePkcs8KeyData != null) {
-        privateKey = await r._importPrivatePkcs8Key!(
-          c.privatePkcs8KeyData!,
-          c.importKeyParams!,
+        privateKey = await _handleException(
+          () => r._importPrivatePkcs8Key!(
+            c.privatePkcs8KeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+
+        if (c.importKeyException != null && privateKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(privateKey != null);
       } else if (c.privateJsonWebKeyData != null) {
-        privateKey = await r._importPrivateJsonWebKey!(
-          c.privateJsonWebKeyData!,
-          c.importKeyParams!,
+        privateKey = await _handleException(
+          () => r._importPrivateJsonWebKey!(
+            c.privateJsonWebKeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+        if (c.importKeyException != null && privateKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(privateKey != null);
       } else {
         check(false, 'missing private key for importing');
@@ -776,27 +912,58 @@ void _runTests<PrivateKey, PublicKey>(
         // If symmetric algorithm we just use the private key.
         publicKey = privateKey as PublicKey;
       } else if (c.publicRawKeyData != null) {
-        publicKey = await r._importPublicRawKey!(
-          c.publicRawKeyData!,
-          c.importKeyParams!,
+        publicKey = await _handleException(
+          () => r._importPublicRawKey!(
+            c.publicRawKeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+
+        if (c.importKeyException != null && publicKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(publicKey != null);
       } else if (c.publicSpkiKeyData != null) {
-        publicKey = await r._importPublicSpkiKey!(
-          c.publicSpkiKeyData!,
-          c.importKeyParams!,
+        publicKey = await _handleException(
+          () => r._importPublicSpkiKey!(
+            c.publicSpkiKeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+
+        if (c.importKeyException != null && publicKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(publicKey != null);
       } else if (c.publicJsonWebKeyData != null) {
-        publicKey = await r._importPublicJsonWebKey!(
-          c.publicJsonWebKeyData!,
-          c.importKeyParams!,
+        publicKey = await _handleException(
+          () => r._importPublicJsonWebKey!(
+            c.publicJsonWebKeyData!,
+            c.importKeyParams!,
+          ),
+          c.importKeyException,
+          c.importKeyExceptionMessage,
         );
+
+        if (c.importKeyException != null && publicKey == null) {
+          return; // Exception was expected and handled
+        }
+
         check(publicKey != null);
       } else {
         check(false, 'missing public key for importing');
       }
     });
+
+    if (c.importKeyException != null) {
+      return;
+    }
   }
 
   //------------------------------ Create a signature for testing
@@ -809,24 +976,43 @@ void _runTests<PrivateKey, PublicKey>(
       signature = c.signature;
     } else {
       test('create signature', () async {
-        signature = await r._signBytes(
-          privateKey as PrivateKey,
-          c.plaintext!,
-          c.signVerifyParams!,
+        signature = await _handleException(
+          () => r._signBytes(
+            privateKey as PrivateKey,
+            c.plaintext!,
+            c.signVerifyParams!,
+          ),
+          c.signException,
+          c.signExceptionMessage,
         );
+
+        if (c.signException != null && signature == null) {
+          return; // Exception was expected and handled
+        }
       });
+
+      if (c.signException != null) {
+        return;
+      }
     }
 
     test('verify signature', () async {
-      check(
-        await r._verifyBytes!(
+      final result = await _handleException(
+        () => r._verifyBytes!(
           publicKey as PublicKey,
           signature!,
           c.plaintext!,
           c.signVerifyParams!,
         ),
-        'failed to verify signature',
+        c.verifyException,
+        c.verifyExceptionMessage,
       );
+
+      if (result == null) {
+        return; // Exception was expected and handled
+      }
+
+      check(result, 'failed to verify signature');
     });
   }
 
@@ -838,20 +1024,41 @@ void _runTests<PrivateKey, PublicKey>(
       ciphertext = c.ciphertext!;
     } else {
       test('create ciphertext', () async {
-        ciphertext = await r._encryptBytes(
-          publicKey as PublicKey,
-          c.plaintext!,
-          c.encryptDecryptParams!,
+        ciphertext = await _handleException(
+          () => r._encryptBytes(
+            publicKey as PublicKey,
+            c.plaintext!,
+            c.encryptDecryptParams!,
+          ),
+          c.encryptException,
+          c.encryptExceptionMessage,
         );
+
+        if (ciphertext == null) {
+          return; // Exception was expected and handled
+        }
       });
+
+      if (c.encryptException != null) {
+        return;
+      }
     }
 
     test('decrypt ciphertext', () async {
-      final text = await r._decryptBytes!(
-        privateKey as PrivateKey,
-        ciphertext!,
-        c.encryptDecryptParams!,
+      final text = await _handleException(
+        () => r._decryptBytes!(
+          privateKey as PrivateKey,
+          ciphertext!,
+          c.encryptDecryptParams!,
+        ),
+        c.decryptException,
+        c.decryptExceptionMessage,
       );
+
+      if (text == null) {
+        return; // Exception was expected and handled
+      }
+
       check(equalBytes(text, c.plaintext!), 'failed to decrypt ciphertext');
     });
   }
@@ -866,24 +1073,47 @@ void _runTests<PrivateKey, PublicKey>(
       derivedBits = c.derivedBits!;
     } else {
       test('create derivedBits', () async {
-        derivedBits = await r._deriveBits(
-          _KeyPair(
+        derivedBits = await _handleException(
+          () => r._deriveBits(
+            _KeyPair(
               privateKey: privateKey as PrivateKey,
-              publicKey: publicKey as PublicKey),
-          c.derivedLength!,
-          c.deriveParams!,
+              publicKey: publicKey as PublicKey,
+            ),
+            c.derivedLength!,
+            c.deriveParams!,
+          ),
+          c.deriveException,
+          c.deriveExceptionMessage,
         );
+
+        if (derivedBits == null) {
+          return; // Exception was expected and handled
+        }
       });
+
+      if (c.deriveException != null) {
+        return;
+      }
     }
 
     test('validated derivedBits', () async {
-      final derived = await r._deriveBits(
-        _KeyPair(
+      final derived = await _handleException(
+        () => r._deriveBits(
+          _KeyPair(
             privateKey: privateKey as PrivateKey,
-            publicKey: publicKey as PublicKey),
-        c.derivedLength!,
-        c.deriveParams!,
+            publicKey: publicKey as PublicKey,
+          ),
+          c.derivedLength!,
+          c.deriveParams!,
+        ),
+        c.deriveException,
+        c.deriveExceptionMessage,
       );
+
+      if (derived == null) {
+        return; // Exception was expected and handled
+      }
+
       check(
         equalBytes(derived, derivedBits!),
         'failed to derivedBits are not consistent',
@@ -896,29 +1126,26 @@ void _runTests<PrivateKey, PublicKey>(
   //// Utility function to verify [sig] using [key].
   Future<void> checkVerifyBytes(PublicKey key, List<int>? sig) async {
     check(sig != null, 'signature cannot be null');
-    check(
-      await r._verifyBytes!(key, sig!, c.plaintext!, c.signVerifyParams!),
-      'failed to verify signature',
+    var valid =
+        await r._verifyBytes!(key, sig!, c.plaintext!, c.signVerifyParams!);
+    check(valid, 'failed to verify signature');
+
+    valid = await r._verifyBytes(
+      key,
+      flipFirstBits(sig),
+      c.plaintext!,
+      c.signVerifyParams!,
     );
-    check(
-      !await r._verifyBytes(
-        key,
-        flipFirstBits(sig),
-        c.plaintext!,
-        c.signVerifyParams!,
-      ),
-      'verified an invalid signature',
-    );
+    check(!valid, 'verified an invalid signature');
+
     if (c.plaintext!.isNotEmpty) {
-      check(
-        !await r._verifyBytes(
-          key,
-          sig,
-          flipFirstBits(c.plaintext!),
-          c.signVerifyParams!,
-        ),
-        'verified an invalid message',
+      valid = await r._verifyBytes(
+        key,
+        sig,
+        flipFirstBits(c.plaintext!),
+        c.signVerifyParams!,
       );
+      check(!valid, 'verified an invalid message');
     }
   }
 
@@ -1025,10 +1252,19 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicRawKey != null);
 
     test('importPublicRawKey()', () async {
-      final key = await r._importPublicRawKey!(
-        c.publicRawKeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPublicRawKey!(
+          c.publicRawKeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }
@@ -1037,10 +1273,19 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicSpkiKey != null);
 
     test('importPublicSpkiKey()', () async {
-      final key = await r._importPublicSpkiKey!(
-        c.publicSpkiKeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPublicSpkiKey!(
+          c.publicSpkiKeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }
@@ -1049,10 +1294,19 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicJsonWebKey != null);
 
     test('importPublicJsonWebKey()', () async {
-      final key = await r._importPublicJsonWebKey!(
-        c.publicJsonWebKeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPublicJsonWebKey!(
+          c.publicJsonWebKeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }
@@ -1061,29 +1315,51 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (c.privateRawKeyData != null) {
     test('importPrivateRawKey()', () async {
-      final key = await r._importPrivateRawKey!(
-        c.privateRawKeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPrivateRawKey!(
+          c.privateRawKeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPrivateKey(key);
     });
   }
 
   if (c.privatePkcs8KeyData != null) {
     test('importPrivatePkcs8Key()', () async {
-      final key = await r._importPrivatePkcs8Key!(
-        c.privatePkcs8KeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPrivatePkcs8Key!(
+          c.privatePkcs8KeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPrivateKey(key);
     });
   }
 
   if (c.privateJsonWebKeyData != null) {
     test('importPrivateJsonWebKey()', () async {
-      final key = await r._importPrivateJsonWebKey!(
-        c.privateJsonWebKeyData!,
-        c.importKeyParams!,
+      final key = await _handleException(
+        () => r._importPrivateJsonWebKey!(
+          c.privateJsonWebKeyData!,
+          c.importKeyParams!,
+        ),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
       );
       await checkPrivateKey(key);
     });
@@ -1093,31 +1369,58 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._signBytes != null) {
     test('signBytes(plaintext)', () async {
-      final sig = await r._signBytes(
-        privateKey as PrivateKey,
-        c.plaintext!,
-        c.signVerifyParams!,
+      final sig = await _handleException(
+        () => r._signBytes(
+          privateKey as PrivateKey,
+          c.plaintext!,
+          c.signVerifyParams!,
+        ),
+        c.signException,
+        c.signExceptionMessage,
       );
+
+      if (sig == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkSignature(sig);
     });
   }
 
   if (r._signStream != null) {
     test('signStream(plaintext)', () async {
-      final sig = await r._signStream(
-        privateKey as PrivateKey,
-        Stream.value(c.plaintext!),
-        c.signVerifyParams!,
+      final sig = await _handleException(
+        () => r._signStream(
+          privateKey as PrivateKey,
+          Stream.value(c.plaintext!),
+          c.signVerifyParams!,
+        ),
+        c.signException,
+        c.signExceptionMessage,
       );
+
+      if (sig == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkSignature(sig);
     });
 
     test('signStream(fibChunked(plaintext))', () async {
-      final sig = await r._signStream(
-        privateKey as PrivateKey,
-        fibonacciChunkedStream(c.plaintext!),
-        c.signVerifyParams!,
+      final sig = await _handleException(
+        () => r._signStream(
+          privateKey as PrivateKey,
+          fibonacciChunkedStream(c.plaintext!),
+          c.signVerifyParams!,
+        ),
+        c.signException,
+        c.signExceptionMessage,
       );
+
+      if (sig == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkSignature(sig);
     });
   }
@@ -1126,34 +1429,61 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._verifyBytes != null) {
     test('verifyBytes(signature, plaintext)', () async {
-      check(
-        await r._verifyBytes(
+      var isValid = await _handleException(
+        () => r._verifyBytes(
           publicKey as PublicKey,
           signature!,
           c.plaintext!,
           c.signVerifyParams!,
         ),
+        c.verifyException,
+        c.verifyExceptionMessage,
+      );
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+      check(
+        isValid,
         'failed to verify signature',
       );
 
-      check(
-        !await r._verifyBytes(
+      isValid = await _handleException(
+        () => r._verifyBytes(
           publicKey as PublicKey,
           flipFirstBits(signature!),
           c.plaintext!,
           c.signVerifyParams!,
         ),
+        c.verifyException,
+        c.verifyExceptionMessage,
+      );
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+
+      check(
+        !isValid,
         'verified an invalid signature',
       );
 
       if (c.plaintext!.isNotEmpty) {
-        check(
-          !await r._verifyBytes(
+        isValid = await _handleException(
+          () => r._verifyBytes(
             publicKey as PublicKey,
             signature!,
             flipFirstBits(c.plaintext!),
             c.signVerifyParams!,
           ),
+          c.verifyException,
+          c.verifyExceptionMessage,
+        );
+
+        if (isValid == null) {
+          return; // Exception was expected and handled
+        }
+
+        check(
+          !isValid,
           'verified an invalid message',
         );
       }
@@ -1162,68 +1492,125 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._verifyStream != null) {
     test('verifyStream(signature, Stream.value(plaintext))', () async {
+      var isValid = await _handleException(
+          () => r._verifyStream(
+                publicKey as PublicKey,
+                signature!,
+                Stream.value(c.plaintext!),
+                c.signVerifyParams!,
+              ),
+          c.verifyException,
+          c.verifyExceptionMessage);
+
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+
       check(
-        await r._verifyStream(
-          publicKey as PublicKey,
-          signature!,
-          Stream.value(c.plaintext!),
-          c.signVerifyParams!,
-        ),
+        isValid,
         'failed to verify signature',
       );
 
-      check(
-        !await r._verifyStream(
+      isValid = await _handleException(
+        () => r._verifyStream(
           publicKey as PublicKey,
           flipFirstBits(signature!),
           Stream.value(c.plaintext!),
           c.signVerifyParams!,
         ),
+        c.verifyException,
+        c.verifyExceptionMessage,
+      );
+
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+
+      check(
+        !isValid,
         'verified an invalid signature',
       );
 
       if (c.plaintext!.isNotEmpty) {
-        check(
-          !await r._verifyStream(
+        isValid = await _handleException(
+          () => r._verifyStream(
             publicKey as PublicKey,
             signature!,
             Stream.value(flipFirstBits(c.plaintext!)),
             c.signVerifyParams!,
           ),
+          c.verifyException,
+          c.verifyExceptionMessage,
+        );
+        if (isValid == null) {
+          return; // Exception was expected and handled
+        }
+
+        check(
+          !isValid,
           'verified an invalid message',
         );
       }
     });
 
     test('verifyStream(signature, fibChunkedStream(plaintext))', () async {
-      check(
-        await r._verifyStream(
+      var isValid = await _handleException(
+        () => r._verifyStream(
           publicKey as PublicKey,
           signature!,
           fibonacciChunkedStream(c.plaintext!),
           c.signVerifyParams!,
         ),
+        c.verifyException,
+        c.verifyExceptionMessage,
+      );
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+
+      check(
+        isValid,
         'failed to verify signature',
       );
 
-      check(
-        !await r._verifyStream(
+      isValid = await _handleException(
+        () => r._verifyStream(
           publicKey as PublicKey,
           flipFirstBits(signature!),
           fibonacciChunkedStream(c.plaintext!),
           c.signVerifyParams!,
         ),
+        c.verifyException,
+        c.verifyExceptionMessage,
+      );
+
+      if (isValid == null) {
+        return; // Exception was expected and handled
+      }
+
+      check(
+        !isValid,
         'verified an invalid signature',
       );
 
       if (c.plaintext!.isNotEmpty) {
-        check(
-          !await r._verifyStream(
+        isValid = await _handleException(
+          () => r._verifyStream(
             publicKey as PublicKey,
             signature!,
             fibonacciChunkedStream(flipFirstBits(c.plaintext!)),
             c.signVerifyParams!,
           ),
+          c.verifyException,
+          c.verifyExceptionMessage,
+        );
+
+        if (isValid == null) {
+          return; // Exception was expected and handled
+        }
+
+        check(
+          !isValid,
           'verified an invalid message',
         );
       }
@@ -1234,31 +1621,58 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._encryptBytes != null) {
     test('encryptBytes(plaintext)', () async {
-      final ctext = await r._encryptBytes(
-        publicKey as PublicKey,
-        c.plaintext!,
-        c.encryptDecryptParams!,
+      final ctext = await _handleException(
+        () => r._encryptBytes(
+          publicKey as PublicKey,
+          c.plaintext!,
+          c.encryptDecryptParams!,
+        ),
+        c.encryptException,
+        c.encryptExceptionMessage,
       );
+
+      if (ctext == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkCipherText(ctext);
     });
   }
 
   if (r._encryptStream != null) {
     test('encryptStream(plaintext)', () async {
-      final ctext = await bufferStream(r._encryptStream(
-        publicKey as PublicKey,
-        Stream.value(c.plaintext!),
-        c.encryptDecryptParams!,
-      ));
+      final ctext = await _handleException(
+        () => bufferStream(r._encryptStream(
+          publicKey as PublicKey,
+          Stream.value(c.plaintext!),
+          c.encryptDecryptParams!,
+        )),
+        c.encryptException,
+        c.encryptExceptionMessage,
+      );
+
+      if (ctext == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkCipherText(ctext);
     });
 
     test('encryptStream(fibChunked(plaintext))', () async {
-      final ctext = await bufferStream(r._encryptStream(
-        publicKey as PublicKey,
-        fibonacciChunkedStream(c.plaintext!),
-        c.encryptDecryptParams!,
-      ));
+      final ctext = await _handleException(
+        () => bufferStream(r._encryptStream(
+          publicKey as PublicKey,
+          fibonacciChunkedStream(c.plaintext!),
+          c.encryptDecryptParams!,
+        )),
+        c.encryptException,
+        c.encryptExceptionMessage,
+      );
+
+      if (ctext == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkCipherText(ctext);
     });
   }
@@ -1267,11 +1681,20 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._decryptBytes != null) {
     test('decryptBytes(plaintext)', () async {
-      final text = await r._decryptBytes(
-        privateKey as PrivateKey,
-        ciphertext!,
-        c.encryptDecryptParams!,
+      final text = await _handleException(
+        () => r._decryptBytes(
+          privateKey as PrivateKey,
+          ciphertext!,
+          c.encryptDecryptParams!,
+        ),
+        c.decryptException,
+        c.decryptExceptionMessage,
       );
+
+      if (text == null) {
+        return; // Exception was expected and handled
+      }
+
       check(
         equalBytes(text, c.plaintext!),
         'failed to decrypt signature',
@@ -1281,11 +1704,20 @@ void _runTests<PrivateKey, PublicKey>(
         // If ciphertext is mangled some primitives like AES-GCM must throw
         // others may return garbled plaintext.
         try {
-          final text2 = await r._decryptBytes(
-            privateKey as PrivateKey,
-            flipFirstBits(ciphertext!),
-            c.encryptDecryptParams!,
+          final text2 = await _handleException(
+            () => r._decryptBytes(
+              privateKey as PrivateKey,
+              flipFirstBits(ciphertext!),
+              c.encryptDecryptParams!,
+            ),
+            c.decryptException,
+            c.decryptExceptionMessage,
           );
+
+          if (text2 == null) {
+            return; // Exception was expected and handled
+          }
+
           check(
             !equalBytes(text2, c.plaintext!),
             'decrypted an invalid ciphertext correctly',
@@ -1299,11 +1731,20 @@ void _runTests<PrivateKey, PublicKey>(
 
   if (r._decryptStream != null) {
     test('decryptStream(Stream.value(ciphertext))', () async {
-      final text = await bufferStream(r._decryptStream(
-        privateKey as PrivateKey,
-        Stream.value(ciphertext!),
-        c.encryptDecryptParams!,
-      ));
+      final text = await _handleException(
+        () => bufferStream(r._decryptStream(
+          privateKey as PrivateKey,
+          Stream.value(ciphertext!),
+          c.encryptDecryptParams!,
+        )),
+        c.decryptException,
+        c.decryptExceptionMessage,
+      );
+
+      if (text == null) {
+        return; // Exception was expected and handled
+      }
+
       check(
         equalBytes(text, c.plaintext!),
         'failed to decrypt signature',
@@ -1313,11 +1754,20 @@ void _runTests<PrivateKey, PublicKey>(
         // If ciphertext is mangled some primitives like AES-GCM must throw
         // others may return garbled plaintext.
         try {
-          final text2 = await bufferStream(r._decryptStream(
-            privateKey as PrivateKey,
-            Stream.value(flipFirstBits(ciphertext!)),
-            c.encryptDecryptParams!,
-          ));
+          final text2 = await _handleException(
+            () => bufferStream(r._decryptStream(
+              privateKey as PrivateKey,
+              Stream.value(flipFirstBits(ciphertext!)),
+              c.encryptDecryptParams!,
+            )),
+            c.decryptException,
+            c.decryptExceptionMessage,
+          );
+
+          if (text2 == null) {
+            return; // Exception was expected and handled
+          }
+
           check(
             !equalBytes(text2, c.plaintext!),
             'decrypted an invalid ciphertext correctly',
@@ -1329,11 +1779,20 @@ void _runTests<PrivateKey, PublicKey>(
     });
 
     test('decryptStream(fibChunkedStream(ciphertext))', () async {
-      final text = await bufferStream(r._decryptStream(
-        privateKey as PrivateKey,
-        fibonacciChunkedStream(ciphertext!),
-        c.encryptDecryptParams!,
-      ));
+      final text = await _handleException(
+        () => bufferStream(r._decryptStream(
+          privateKey as PrivateKey,
+          fibonacciChunkedStream(ciphertext!),
+          c.encryptDecryptParams!,
+        )),
+        c.decryptException,
+        c.decryptExceptionMessage,
+      );
+
+      if (text == null) {
+        return; // Exception was expected and handled
+      }
+
       check(
         equalBytes(text, c.plaintext!),
         'failed to decrypt signature',
@@ -1343,11 +1802,20 @@ void _runTests<PrivateKey, PublicKey>(
         // If ciphertext is mangled some primitives like AES-GCM must throw
         // others may return garbled plaintext.
         try {
-          final text2 = await bufferStream(r._decryptStream(
-            privateKey as PrivateKey,
-            fibonacciChunkedStream(flipFirstBits(ciphertext!)),
-            c.encryptDecryptParams!,
-          ));
+          final text2 = await _handleException(
+            () => bufferStream(r._decryptStream(
+              privateKey as PrivateKey,
+              fibonacciChunkedStream(flipFirstBits(ciphertext!)),
+              c.encryptDecryptParams!,
+            )),
+            c.decryptException,
+            c.decryptExceptionMessage,
+          );
+
+          if (text2 == null) {
+            return; // Exception was expected and handled
+          }
+
           check(
             !equalBytes(text2, c.plaintext!),
             'decrypted an invalid ciphertext correctly',
@@ -1362,13 +1830,22 @@ void _runTests<PrivateKey, PublicKey>(
   //------------------------------ Test derivedBits
   if (r._deriveBits != null) {
     test('deriveBits', () async {
-      final derived = await r._deriveBits(
-        _KeyPair(
-            privateKey: privateKey as PrivateKey,
-            publicKey: publicKey as PublicKey),
-        c.derivedLength!,
-        c.deriveParams!,
+      final derived = await _handleException(
+        () => r._deriveBits(
+          _KeyPair(
+              privateKey: privateKey as PrivateKey,
+              publicKey: publicKey as PublicKey),
+          c.derivedLength!,
+          c.deriveParams!,
+        ),
+        c.deriveException,
+        c.deriveExceptionMessage,
       );
+
+      if (derived == null) {
+        return; // Exception was expected and handled
+      }
+
       checkDerivedBits(derived);
     });
   }
@@ -1376,30 +1853,84 @@ void _runTests<PrivateKey, PublicKey>(
   //------------------------------ export/import private key
   if (r._exportPrivateRawKey != null) {
     test('export/import raw private key', () async {
-      final keyData = await r._exportPrivateRawKey(privateKey as PrivateKey);
+      final keyData = await _handleException(
+        () => r._exportPrivateRawKey(privateKey as PrivateKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (keyData == null) {
+        return; // Exception was expected and handled
+      }
+
       check(keyData.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPrivateRawKey!(keyData, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPrivateRawKey!(keyData, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPrivateKey(key);
     });
   }
 
   if (r._exportPrivatePkcs8Key != null) {
     test('export/import pkcs8 private key', () async {
-      final keyData = await r._exportPrivatePkcs8Key(privateKey as PrivateKey);
+      final keyData = await _handleException(
+        () => r._exportPrivatePkcs8Key(privateKey as PrivateKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (keyData == null) {
+        return; // Exception was expected and handled
+      }
+
       check(keyData.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPrivatePkcs8Key!(keyData, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPrivatePkcs8Key!(keyData, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPrivateKey(key);
     });
   }
 
   if (r._exportPrivateJsonWebKey != null) {
     test('export/import jwk private key', () async {
-      final jwk = await r._exportPrivateJsonWebKey(privateKey as PrivateKey);
+      final jwk = await _handleException(
+        () => r._exportPrivateJsonWebKey(privateKey as PrivateKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (jwk == null) {
+        return; // Exception was expected and handled
+      }
+
       check(jwk.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPrivateJsonWebKey!(jwk, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPrivateJsonWebKey!(jwk, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPrivateKey(key);
     });
   }
@@ -1410,10 +1941,28 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicRawKey != null);
 
     test('export/import raw public key', () async {
-      final keyData = await r._exportPublicRawKey(publicKey as PublicKey);
+      final keyData = await _handleException(
+        () => r._exportPublicRawKey(publicKey as PublicKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (keyData == null) {
+        return; // Exception was expected and handled
+      }
+
       check(keyData.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPublicRawKey!(keyData, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPublicRawKey!(keyData, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }
@@ -1422,10 +1971,28 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicSpkiKey != null);
 
     test('export/import pkcs8 public key', () async {
-      final keyData = await r._exportPublicSpkiKey(publicKey as PublicKey);
+      final keyData = await _handleException(
+        () => r._exportPublicSpkiKey(publicKey as PublicKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (keyData == null) {
+        return; // Exception was expected and handled
+      }
+
       check(keyData.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPublicSpkiKey!(keyData, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPublicSpkiKey!(keyData, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }
@@ -1434,10 +2001,28 @@ void _runTests<PrivateKey, PublicKey>(
     assert(!r._isSymmetric && r._importPublicJsonWebKey != null);
 
     test('export/import jwk public key', () async {
-      final jwk = await r._exportPublicJsonWebKey(publicKey as PublicKey);
+      final jwk = await _handleException(
+        () => r._exportPublicJsonWebKey(publicKey as PublicKey),
+        c.exportKeyException,
+        c.exportKeyExceptionMessage,
+      );
+
+      if (jwk == null) {
+        return; // Exception was expected and handled
+      }
+
       check(jwk.isNotEmpty, 'exported key is empty');
 
-      final key = await r._importPublicJsonWebKey!(jwk, c.importKeyParams!);
+      final key = await _handleException(
+        () => r._importPublicJsonWebKey!(jwk, c.importKeyParams!),
+        c.importKeyException,
+        c.importKeyExceptionMessage,
+      );
+
+      if (key == null) {
+        return; // Exception was expected and handled
+      }
+
       await checkPublicKey(key);
     });
   }

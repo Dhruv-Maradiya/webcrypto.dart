@@ -106,6 +106,77 @@ final _testData = [
     "importKeyParams": {"hash": "sha-512"},
     "signVerifyParams": {"saltLength": 64}
   },
+  // This test is expected to throw an exception during key generation.
+  {
+    "name": "2048/e3/sha-512/s64 - key generation exception",
+    "generateKeyParams": {
+      "hash": "sha-512",
+      "modulusLength": 124,
+      "publicExponent": "3"
+    },
+    "plaintext":
+        "IFN1c3BlbmRpc3NlIHBsYWNlcmF0LCBhcmN1IGF0IGNvbnNlY3RldHVyCmFsaXF1ZXQsIGRvbG9yIGF1Z3VlIG1vbGVzdGllIA==",
+    "importKeyParams": {"hash": "sha-512"},
+    "signVerifyParams": {"saltLength": 64},
+    "generateKeyException": UnsupportedError,
+    "generateKeyExceptionMessage": "modulusLength must between 256 and 16k",
+  },
+  // This test is expected to throw an exception during import key.
+  {
+    "name":
+        "2048/e65537/sha-256/s32 generated on linux at 2020-09-23 - import key exception",
+    "privateJsonWebKeyData": {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "PS256",
+      "d":
+          "N2N0t_LpioCi01amo0QinHNxaAJPz1IVVkBLrjIhnfwckpUm0sPeJgxPZOdFil9l0mjDuKAoulFmOkORnhUEI0A2vB_wNt3XUKCb5l3Q4hYs_iLlKUSUIEeflS4erWos7ln-twrnBnsJH28J6oBlk5Wi_YinGEAi6vgCz3Cx2rTO0bkOsOQrVEUmO7SeN4Cbeg0tn_qs7kdw39vK76WOCIEg6XSsE9f-blrQbKTuZX2hUvaRi0S1een6EHUVrXuFhVDPnRjSYqcL4JBHBCFdVrisouC8aX6DA7HsCR7QT9RAqC6i8evlWb_1sv7FRqZn-NlVVaJf1eNS6VA1gpdgeQ",
+      "n":
+          "kjnySee1hJKiovDTN7M2cKSQTlR80UIKzO80n8H1blWruVYuALKz24pEmalZe2xZYsXix1j-k5-LIvECfKG96R7UKQzeQtCHXYRkCk847bYqAW6pAvEGetlVD0udOR0ZmHvCfKmect7Q11MN8VlsuoB3qA1fEFUBvRzzI9NHN2U74imtorfa756i0EIg2uFFGmUqo-6dY_v9AeuBbvM5Iy2gCePXRQfGVM2TwA26K4Dazxz6VZPQRNaQTwp06M084yA5bUeK3G-sBLJnqnAz-pq_snyMGhfhETwYqEeg1EOFbULcEsurH7DFiCzUr4T2hy6EyhfD9UjC6G_hggNcVw",
+      "e": "AQAB",
+      "p":
+          "yY71LlEWEgMZg7ri-XwMVEJ083C_i_L1r-9wY8AEn5Wtgs3CSS8e2B93LGomIPpwda43kfmHXiExms7t53MmbksRNM2whIZJBNjWEDM2I1df9rv7jx1hQ6Lmj5_iDqU9YYoxY5NNcvWSMgMmFkrSUoPGiDxmTqHp98D-dHlAYN8",
+      "q":
+          "ubj5ZIsUHwnFdd0f0N0ajLa0fqcjcm4WP2JyV5vRbzw3bEnwQZvUvw52YSdZ0r2jHIH2bu92L8XGu3fW5rplqI7zC-JfqF7Jz2tiKi4H2rFOUCB8p27kl7niJHNP4oAS1brjXNhA4jWQIGR9tbiwvJ21FyTytIMcIELGWv6oG4k",
+      "dp":
+          "O8Tiu8tbyheVN1Tx_Z1lYo8acx4aDvwLExLjtxC3zkLqYwF0_ZK1iM0737XSfLEHLD5vSCBAng8l0IxQS_P_j3E_NvNPxtyzRnauc7tb8Hr2gAoafMPvlcj2qdx1gnZJj2UVZDvIGbDsm1wHrVCesc1V0AxpIiQtZ0SZsBxMlO0",
+      "dq":
+          "P-9Go28haSHzAQUza7KB7kkDT8p38G-nZwCb_j7c1V80cSnu9JcRoQf4hq-GQ38XBLxUupHi7MU4CddSerFWR7WWQ9QVPCANd0MvUvfvqkB5hin436bUOMs753Ju4LlYQo2IsbCcfYMU76HIiONgrD3aVnJYvv2XlB-Iq1CZTIk",
+      "qi":
+          "hjKuj8k5a6Y1oXgPI3VtJeSb7OnY6bXpSBCco5MgnvG_cM4IVlYTcO-H5K__XJ6N6A7oFxzFJ476NKlEdOsCbLjKs4vyaKCid5Wye1k-IRd5xfwRvr7zqsgtCYk5oHjjeXSGk05_sjefCXnTuoyD04O3Ntk8OSgFNEfeR5Q4-sA"
+    },
+    "publicJsonWebKeyData": {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "PS256",
+      "n":
+          "kjnySee1hJKiovDTN7M2cKSQTlR80UIKzO80n8H1blWruVYuALKz24pEmalZe2xZYsXix1j-k5-LIvECfKG96R7UKQzeQtCHXYRkCk847bYqAW6pAvEGetlVD0udOR0ZmHvCfKmect7Q11MN8VlsuoB3qA1fEFUBvRzzI9NHN2U74imtorfa756i0EIg2uFFGmUqo-6dY_v9AeuBbvM5Iy2gCePXRQfGVM2TwA26K4Dazxz6VZPQRNaQTwp06M084yA5bUeK3G-sBLJnqnAz-pq_snyMGhfhETwYqEeg1EOFbULcEsurH7DFiCzUr4T2hy6EyhfD9UjC6G_hggNcVw",
+      "e": "AQAB"
+    },
+    "plaintext":
+        "IFN1c3BlbmRpc3NlIHBsYWNlcmF0LCBhcmN1IGF0IGNvbnNlY3RldHVyCmFsaXF1ZXQsIGRvbG9yIGF1Z3VlIG1vbGVzdGllIA==",
+    "signature":
+        "E/rXJqRVnLSUrz0xGn3VmyO9fXCHPqpzzClUFjOJW7fDz8SEDErHbgU/PuiuMdU33vuT2BS/VB49xQz+XZGwIq59fkCXgjsm0itf2tNf3IpdOZx2AZGOQ5Dr87BzMTKO+kmHvWh/HATbfKt15KpHsbFE/XeU6RgLS4J8WAzHD+aEl7FQYH7lEf+H/PKpNuh+dLkzAZTimQnFroMZUR7BjIQ5WnhCcHaL3bhkfBIm88cKcsZwUZ+o+xxIOZY1NdDT/y+a/6k3wckYroTOtBD1XQ0gl2iIT2ZcPc2DLV+45hXfgPdwYMjPsMrP5c2DyXWlo5ANgOtiIjgJtLv3BxeisA==",
+    "importKeyParams": {"hash": "sha-512"},
+    "signVerifyParams": {"saltLength": 32},
+    "importKeyException": FormatException,
+    "importKeyExceptionMessage": 'JWK property "alg" must be "PS512"',
+  },
+  // This test is expected to throw an exception during sign byte.
+  {
+    "name": "2048/e3/sha-512/s64 - sign byte exception",
+    "generateKeyParams": {
+      "hash": "sha-512",
+      "modulusLength": 2048,
+      "publicExponent": "3"
+    },
+    "plaintext":
+        "IFN1c3BlbmRpc3NlIHBsYWNlcmF0LCBhcmN1IGF0IGNvbnNlY3RldHVyCmFsaXF1ZXQsIGRvbG9yIGF1Z3VlIG1vbGVzdGllIA==",
+    "importKeyParams": {"hash": "sha-512"},
+    "signVerifyParams": {"saltLength": -1},
+    "signException": ArgumentError,
+    "signExceptionMessage": "must be a positive integer",
+  },
 
   ..._generatedTestData,
 
