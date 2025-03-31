@@ -106,6 +106,34 @@ final _testData = [
     "importKeyParams": {"hash": "sha-512"},
     "signVerifyParams": {"saltLength": 64}
   },
+
+  ..._exceptionTestData,
+
+  ..._generatedTestData,
+
+  /// [WebKit on mac][1] uses [CommonCrypto][2] which uses [corecrypto][3] which
+  /// follows [FIPS 186-4, Section 5.5, Step (e)][4] restricting `saltLength` to
+  /// `0 <= saltLength <= hashLength`.
+  ///
+  /// [RFC 3447][5] notes that typical `saltLength` is 0 or _length of hash_.
+  /// In general the discussion only concerns itself with `saltLength` between
+  /// 0 and _length of hash_, hence, it seems plausible that `saltLength` longer
+  /// than _length of hash_ makes little sense.
+  /// For more information see [RFC 3447 Section 9.1, Notes 4][6].
+  ///
+  /// This discrepancy is reported in [216750 on bugs.webkit.org][7].
+  ///
+  /// [1]: https://trac.webkit.org/browser/webkit/trunk/Source/WebCore/crypto/mac/CryptoAlgorithmRSA_PSSMac.cpp?rev=238754#L56
+  /// [2]: https://opensource.apple.com/source/CommonCrypto/CommonCrypto-60165.120.1/lib/CommonRSACryptor.c.auto.html
+  /// [3]: https://opensource.apple.com/source/xnu/xnu-4570.41.2/EXTERNAL_HEADERS/corecrypto/ccrsa.h.auto.html
+  /// [4]: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
+  /// [5]: https://tools.ietf.org/html/rfc3447
+  /// [6]: https://tools.ietf.org/html/rfc3447#section-9.1
+  /// [7]: https://bugs.webkit.org/show_bug.cgi?id=216750
+  ...(nullOnSafari(_testDataWithLongSaltLength) ?? <Map>[]),
+];
+
+final _exceptionTestData = [
   // This test is expected to throw an exception during key generation.
   {
     "name": "2048/e3/sha-512/s64 - key generation exception",
@@ -177,29 +205,6 @@ final _testData = [
     "signException": ArgumentError,
     "signExceptionMessage": "must be a positive integer",
   },
-
-  ..._generatedTestData,
-
-  /// [WebKit on mac][1] uses [CommonCrypto][2] which uses [corecrypto][3] which
-  /// follows [FIPS 186-4, Section 5.5, Step (e)][4] restricting `saltLength` to
-  /// `0 <= saltLength <= hashLength`.
-  ///
-  /// [RFC 3447][5] notes that typical `saltLength` is 0 or _length of hash_.
-  /// In general the discussion only concerns itself with `saltLength` between
-  /// 0 and _length of hash_, hence, it seems plausible that `saltLength` longer
-  /// than _length of hash_ makes little sense.
-  /// For more information see [RFC 3447 Section 9.1, Notes 4][6].
-  ///
-  /// This discrepancy is reported in [216750 on bugs.webkit.org][7].
-  ///
-  /// [1]: https://trac.webkit.org/browser/webkit/trunk/Source/WebCore/crypto/mac/CryptoAlgorithmRSA_PSSMac.cpp?rev=238754#L56
-  /// [2]: https://opensource.apple.com/source/CommonCrypto/CommonCrypto-60165.120.1/lib/CommonRSACryptor.c.auto.html
-  /// [3]: https://opensource.apple.com/source/xnu/xnu-4570.41.2/EXTERNAL_HEADERS/corecrypto/ccrsa.h.auto.html
-  /// [4]: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
-  /// [5]: https://tools.ietf.org/html/rfc3447
-  /// [6]: https://tools.ietf.org/html/rfc3447#section-9.1
-  /// [7]: https://bugs.webkit.org/show_bug.cgi?id=216750
-  ...(nullOnSafari(_testDataWithLongSaltLength) ?? <Map>[]),
 ];
 
 final _generatedTestData = [
